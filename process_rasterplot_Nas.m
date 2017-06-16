@@ -120,8 +120,9 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     tfOPTIONS.TimeVector = in_bst(sInputs(1).FileName, 'Time');
 
     % === OUTPUT STUDY ===
-
-    tfOPTIONS.iTargetStudy = [];
+    % Get output study
+    [sStudy, iStudy, Comment] = bst_process('GetOutputStudy', sProcess, sInputs);
+    tfOPTIONS.iTargetStudy = iStudy;
     
     
     
@@ -138,14 +139,14 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     
     fs = abs(1./(tfOPTIONS.TimeVector(2)-tfOPTIONS.TimeVector(1)));
     
-    temp = load(['E:/brainstorm_db/Playground/data/' sInputs(1).FileName],'ChannelFlag','Time');
+    [temp, matName] = in_bst(sInputs(1).FileName);
     nElectrodes = size(temp.ChannelFlag,1); 
     raster = zeros(nElectrodes, length(sInputs), ceil(length(tfOPTIONS.TimeVector)/(bin_size*fs/1000))); % 195x3x33  = 195 electrodes x 3 trials x 33 bins.
     the_bin_centers = linspace(temp.Time(1)-abs((temp.Time(1)-temp.Time(2))/2),temp.Time(end)+abs((temp.Time(1)-temp.Time(2))/2),ceil(length(tfOPTIONS.TimeVector)/(bin_size*fs/1000)));
     clear temp
     
     for ifile = 1:length(sInputs)
-        trial = load(['E:/brainstorm_db/Playground/data/' sInputs(ifile).FileName]);
+        [trial, matName] = in_bst(sInputs(ifile).FileName);
         single_file_binning = zeros(nElectrodes, ceil(length(tfOPTIONS.TimeVector)/(bin_size*fs/1000)));
         for ielectrode = 1:size(trial.F,1)
             for ievent = 1:size(trial.Events,2)
@@ -172,13 +173,19 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     ielec = 90;
     
     figure(1);imagesc(the_bin_centers,1:length(sInputs),squeeze(raster(ielec,:,:))); 
-    xlabel 'Time (sec)';ylabel 'Trial'; yticks([1:length(sInputs)]);
+    xlabel 'Time (sec)';ylabel 'Trial'; %yticks([1:length(sInputs)]);
     title ({'Raster Plot';['Electrode: ' num2str(ielec)];['Bin Size: ' num2str(bin_size) ' msec']})
     
+    % Get channel file
+    sChannel = bst_get('ChannelForStudy', iStudy);
+    % Load channel file
+    ChannelMat = in_bst_channel(sChannel.FileName);
+    tfOPTIONS.RowNames = {ChannelMat.Channel.Name};
+    tfOPTIONS.ParentFiles = {sInputs.FileName};
     
     isError = 0;
     Messages = 'Success';
-    [OutputFiles] = save_virtual_freq_file(raster, the_bin_centers);
+    [OutputFiles] = save_virtual_freq_file(raster, the_bin_centers, tfOPTIONS);
 % % % % % % % %     [OutputFiles, Messages, isError] = bst_timefreq(DataToProcess, tfOPTIONS);
     if ~isempty(Messages)
         if isError
@@ -193,9 +200,7 @@ end
 
 
 
-function [OutputFiles] = save_virtual_freq_file(raster, the_bin_centers)
-    
-    a = load('E:/brainstorm_db/Playground/data/Monkey/test_LFP_EYE/timefreq_trial011_morlet_170616_1605.mat'); 
+function [OutputFiles] = save_virtual_freq_file(raster, the_bin_centers, tfOPTIONS)
     % This loads an example TF to get key information
     % (RowNames,Options,History). Get rid of that
     
@@ -209,10 +214,10 @@ function [OutputFiles] = save_virtual_freq_file(raster, the_bin_centers)
     DataType = 'data';
     TimeBands = [];
     RefRowNames = [];
-    RowNames = a.RowNames;
+    RowNames = tfOPTIONS.RowNames;
     Measure = 'power';
     Method = 'morlet';
-    DataFile = 'Monkey/test_LFP_EYE/data_event1_trial011_02.mat';
+    DataFile = []; % Leave blank because multiple parents
     SurfaceFile = [];
     GridLoc = [];
     GridAtlas = [];
@@ -222,8 +227,8 @@ function [OutputFiles] = save_virtual_freq_file(raster, the_bin_centers)
     nAvg = [];
     ColormapType = [];
     DisplayUnits = [];
-    Options = a.Options;
-    History = a.History;
+    Options = tfOPTIONS;
+    History = [];
     
     
     FileMat.TF = TF;
@@ -248,17 +253,19 @@ function [OutputFiles] = save_virtual_freq_file(raster, the_bin_centers)
     FileMat.nAvg = nAvg;
     FileMat.ColormapType = ColormapType;
     FileMat.DisplayUnits = DisplayUnits;
-    FileMat.Options = Options ;
+    FileMat.Options = tfOPTIONS;
     FileMat.History = History;
     
-    Filename = 'E:/brainstorm_db/Playground/data/Monkey/test_LFP_EYE/timefreq_trial011_morlet_990616_1605.mat';
+    % Get output study
+    sTargetStudy = bst_get('Study', tfOPTIONS.iTargetStudy);
+    % Output filename
+    Filename = bst_process('GetNewFilename', bst_fileparts(sTargetStudy.FileName), 'timefreq_rasterplot');
     OutputFiles = {Filename};
     save (Filename,'TF', 'Time', 'TFmask','Freqs','Std','Comment','DataType','TimeBands','RefRowNames',...
         'RowNames','Measure','Method','DataFile','SurfaceFile','GridLoc','GridAtlas','Atlas','HeadModelFile',...
         'HeadModelType','nAvg','ColormapType','DisplayUnits','Options','History')
 
-%     db_add_data(iTargetStudy, FileName, FileMat);
-    db_add_data(16, Filename, FileMat);
+    db_add_data(tfOPTIONS.iTargetStudy, Filename, FileMat);
 
 end
 
