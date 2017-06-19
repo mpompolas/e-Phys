@@ -146,7 +146,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         [trial, ~] = in_bst(sInputs(ifile).FileName);
         single_file_binning = zeros(nElectrodes, nBins);
         
-        for ielectrode = 83:size(trial.F,1)
+        for ielectrode = 1:size(trial.F,1)
             for ievent = 1:size(trial.Events,2)
                 if strcmp(trial.Events(ievent).label, ['Spikes Electrode ' num2str(ielectrode)])
                     
