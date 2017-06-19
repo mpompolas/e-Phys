@@ -39,7 +39,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Index       = 1505;
     sProcess.Description = 'www.in.gr';
     % Definition of the input accepted by this process
-    sProcess.InputTypes  = {'data', 'results', 'matrix'};
+    sProcess.InputTypes  = {'data'};
     sProcess.OutputTypes = {'timefreq', 'timefreq', 'timefreq'};
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
@@ -49,29 +49,29 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.sensortypes.Value   = 'MEG, EEG';
     sProcess.options.sensortypes.InputTypes = {'data'};
     sProcess.options.sensortypes.Group   = 'input';
-    % Options: Scouts
-    sProcess.options.clusters.Comment = '';
-    sProcess.options.clusters.Type    = 'scout_confirm';
-    sProcess.options.clusters.Value   = {};
-    sProcess.options.clusters.InputTypes = {'results'};
-    sProcess.options.clusters.Group   = 'input';
-    % Options: Scout function
-    sProcess.options.scoutfunc.Comment    = {'Mean', 'Max', 'PCA', 'Std', 'All', 'Scout function:'};
-    sProcess.options.scoutfunc.Type       = 'radio_line';
-    sProcess.options.scoutfunc.Value      = 1;
-    sProcess.options.scoutfunc.InputTypes = {'results'};
-    sProcess.options.scoutfunc.Group   = 'input';
-    % Options: Time-freq
-    sProcess.options.edit.Comment = {'panel_timefreq_options', 'Morlet wavelet options: '};
-    sProcess.options.edit.Type    = 'editpref';
-    sProcess.options.edit.Value   = [];
-    % Options: Normalize
-    sProcess.options.labelnorm.Comment = '<BR>Spectral flattening:';
-    sProcess.options.labelnorm.Type    = 'label';
-    sProcess.options.normalize.Comment = {'<B>None</B>: Save non-standardized time-frequency maps', '<B>1/f compensation</B>: Multiply output values by frequency'; ...
-                                          'none', 'multiply'};
-    sProcess.options.normalize.Type    = 'radio_label';
-    sProcess.options.normalize.Value   = 'none';
+%     % Options: Scouts
+%     sProcess.options.clusters.Comment = '';
+%     sProcess.options.clusters.Type    = 'scout_confirm';
+%     sProcess.options.clusters.Value   = {};
+%     sProcess.options.clusters.InputTypes = {'results'};
+%     sProcess.options.clusters.Group   = 'input';
+%     % Options: Scout function
+%     sProcess.options.scoutfunc.Comment    = {'Mean', 'Max', 'PCA', 'Std', 'All', 'Scout function:'};
+%     sProcess.options.scoutfunc.Type       = 'radio_line';
+%     sProcess.options.scoutfunc.Value      = 1;
+%     sProcess.options.scoutfunc.InputTypes = {'results'};
+%     sProcess.options.scoutfunc.Group   = 'input';
+%     % Options: Time-freq
+%     sProcess.options.edit.Comment = {'panel_timefreq_options', 'Morlet wavelet options: '};
+%     sProcess.options.edit.Type    = 'editpref';
+%     sProcess.options.edit.Value   = [];
+%     % Options: Normalize
+%     sProcess.options.labelnorm.Comment = '<BR>Spectral flattening:';
+%     sProcess.options.labelnorm.Type    = 'label';
+%     sProcess.options.normalize.Comment = {'<B>None</B>: Save non-standardized time-frequency maps', '<B>1/f compensation</B>: Multiply output values by frequency'; ...
+%                                           'none', 'multiply'};
+%     sProcess.options.normalize.Type    = 'radio_label';
+%     sProcess.options.normalize.Value   = 'none';
     % Options: Bin size
     sProcess.options.binsize.Comment = 'Bin size: ';
     sProcess.options.binsize.Type    = 'value';
@@ -140,7 +140,8 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     nBins = ceil(length(tfOPTIONS.TimeVector) / (bin_size * sampling_rate));
     raster = zeros(nElectrodes, nTrials, nBins);
     
-    sample_radius = abs((temp.Time(1) - temp.Time(2)) / 2);
+    sample_radius = abs((temp.Time(1) - temp.Time(2)) / 10); % This is used just to extend the first and last bin outside of the Time limits. 
+                                                             % If a spike occurs exaclty at the first or last sample, the code crashed. This takes care of that.
     bins = linspace(temp.Time(1) - sample_radius, temp.Time(end) + sample_radius, nBins);
     
     for ifile = 1:length(sInputs)
@@ -154,11 +155,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
                      unique_bin = unique(bin_it_belongs_to);
                      occurences = [unique_bin; histc(bin_it_belongs_to, unique_bin)];
                      
-                     try
-                        single_file_binning(ielectrode,occurences(1,:)) = occurences(2,:);
-                     catch
-                         continue
-                     end
+                     single_file_binning(ielectrode,occurences(1,:)) = occurences(2,:);
                 end
             end
             
