@@ -140,22 +140,27 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     nBins = ceil(length(tfOPTIONS.TimeVector) / (bin_size * sampling_rate));
     raster = zeros(nElectrodes, nTrials, nBins);
     
-    sample_radius = abs((temp.Time(1) - temp.Time(2)) / 10); % This is used just to extend the first and last bin outside of the Time limits. 
-                                                             % If a spike occurs exaclty at the first or last sample, the code crashed. This takes care of that.
-    bins = linspace(temp.Time(1) - sample_radius, temp.Time(end) + sample_radius, nBins);
+    bins = linspace(temp.Time(1), temp.Time(end), nBins);
     
     for ifile = 1:length(sInputs)
         [trial, ~] = in_bst(sInputs(ifile).FileName);
         single_file_binning = zeros(nElectrodes, nBins);
         
-        for ielectrode = 1:size(trial.F,1)
+        for ielectrode = 83:size(trial.F,1)
             for ievent = 1:size(trial.Events,2)
                 if strcmp(trial.Events(ievent).label, ['Spikes Electrode ' num2str(ielectrode)])
-                     [~, ~, bin_it_belongs_to] = histcounts(trial.Events(ievent).times, bins);
-                     unique_bin = unique(bin_it_belongs_to);
-                     occurences = [unique_bin; histc(bin_it_belongs_to, unique_bin)];
+                    
+                    outside = trial.Events(ievent).times>bins(end);
+                    trial.Events(ievent).times(outside) = bins(end);
+                    outside = trial.Events(ievent).times<bins(1);
+                    trial.Events(ievent).times(outside) = bins(1);
+
+                    [~, ~, bin_it_belongs_to] = histcounts(trial.Events(ievent).times, bins);
                      
-                     single_file_binning(ielectrode,occurences(1,:)) = occurences(2,:);
+                    unique_bin = unique(bin_it_belongs_to);
+                    occurences = [unique_bin; histc(bin_it_belongs_to, unique_bin)];
+                     
+                    single_file_binning(ielectrode,occurences(1,:)) = occurences(2,:);                    
                 end
             end
             
