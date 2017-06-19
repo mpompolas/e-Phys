@@ -72,6 +72,10 @@ function sProcess = GetDescription() %#ok<DEFNU>
                                           'none', 'multiply'};
     sProcess.options.normalize.Type    = 'radio_label';
     sProcess.options.normalize.Value   = 'none';
+    % Options: Bin size
+    sProcess.options.binsize.Comment = 'Bin size: ';
+    sProcess.options.binsize.Type    = 'value';
+    sProcess.options.binsize.Value   = {0.05, 'ms', 1};
 end
 
 
@@ -88,7 +92,6 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     % Extract method name from the process name
     strProcess = strrep(strrep(func2str(sProcess.Function), 'process_', ''), 'timefreq', 'morlet');
     
-    
     % Add other options
     tfOPTIONS.Method = strProcess;
     if isfield(sProcess.options, 'sensortypes')
@@ -97,6 +100,13 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         tfOPTIONS.SensorTypes = [];
     end
     
+    % Bin size
+    if isfield(sProcess.options, 'binsize') && ~isempty(sProcess.options.binsize) && ~isempty(sProcess.options.binsize.Value) && iscell(sProcess.options.binsize.Value) && sProcess.options.binsize.Value{1} > 0
+        bin_size = sProcess.options.binsize.Value{1};
+    else
+        bst_report('Error', sProcess, sInputs, 'Positive bin size required.');
+        return;
+    end
     
     % If a time window was specified
     if isfield(sProcess.options, 'timewindow') && ~isempty(sProcess.options.timewindow) && ~isempty(sProcess.options.timewindow.Value) && iscell(sProcess.options.timewindow.Value)
@@ -114,165 +124,93 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         end
     end
     
-    
-    
-    DataToProcess = {sInputs.FileName};
     tfOPTIONS.TimeVector = in_bst(sInputs(1).FileName, 'Time');
 
     % === OUTPUT STUDY ===
     % Get output study
-    [sStudy, iStudy, Comment] = bst_process('GetOutputStudy', sProcess, sInputs);
+    [~, iStudy, ~] = bst_process('GetOutputStudy', sProcess, sInputs);
     tfOPTIONS.iTargetStudy = iStudy;
     
-    
-    
-    
     % === START COMPUTATION ===
-    % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    sampling_rate = abs(1. / (tfOPTIONS.TimeVector(2) - tfOPTIONS.TimeVector(1)));
     
-    bin_size = 50; % This sets the bin size for the raster plot. IN MSEC % THIS SHOULD BE ON THE INITIAL GUI
-    
-    
-    
-    
-    fs = abs(1./(tfOPTIONS.TimeVector(2)-tfOPTIONS.TimeVector(1)));
-    
-    [temp, matName] = in_bst(sInputs(1).FileName);
+    [temp, ~] = in_bst(sInputs(1).FileName);
     nElectrodes = size(temp.ChannelFlag,1); 
-    raster = zeros(nElectrodes, length(sInputs), ceil(length(tfOPTIONS.TimeVector)/(bin_size*fs/1000))); % 195x3x33  = 195 electrodes x 3 trials x 33 bins.
-    the_bin_centers = linspace(temp.Time(1)-abs((temp.Time(1)-temp.Time(2))/2),temp.Time(end)+abs((temp.Time(1)-temp.Time(2))/2),ceil(length(tfOPTIONS.TimeVector)/(bin_size*fs/1000)));
-    clear temp
+    nTrials = length(sInputs);
+    nBins = ceil(length(tfOPTIONS.TimeVector) / (bin_size * sampling_rate));
+    raster = zeros(nElectrodes, nTrials, nBins);
+    
+    sample_radius = abs((temp.Time(1) - temp.Time(2)) / 2);
+    bins = linspace(temp.Time(1) - sample_radius, temp.Time(end) + sample_radius, nBins);
     
     for ifile = 1:length(sInputs)
-        [trial, matName] = in_bst(sInputs(ifile).FileName);
-        single_file_binning = zeros(nElectrodes, ceil(length(tfOPTIONS.TimeVector)/(bin_size*fs/1000)));
+        [trial, ~] = in_bst(sInputs(ifile).FileName);
+        single_file_binning = zeros(nElectrodes, nBins);
+        
         for ielectrode = 1:size(trial.F,1)
             for ievent = 1:size(trial.Events,2)
-                
                 if strcmp(trial.Events(ievent).label, ['Spikes Electrode ' num2str(ielectrode)])
-                     [~,~,bin_it_belongs_to]= histcounts(trial.Events(ievent).times,the_bin_centers);
-                     a = unique(bin_it_belongs_to);
-                     occurences = [a;histc(bin_it_belongs_to,a)];
+                     [~, ~, bin_it_belongs_to] = histcounts(trial.Events(ievent).times, bins);
+                     unique_bin = unique(bin_it_belongs_to);
+                     occurences = [unique_bin; histc(bin_it_belongs_to, unique_bin)];
+                     
                      try
                         single_file_binning(ielectrode,occurences(1,:)) = occurences(2,:);
                      catch
                          continue
                      end
-                         
                 end
             end
             
         end
-        raster(:,ifile,:) = single_file_binning;
         
+        raster(:, ifile, :) = single_file_binning;
     end
-    
-    
-    ielec = 90;
-    
-    figure(1);imagesc(the_bin_centers,1:length(sInputs),squeeze(raster(ielec,:,:))); 
-    xlabel 'Time (sec)';ylabel 'Trial'; %yticks([1:length(sInputs)]);
-    title ({'Raster Plot';['Electrode: ' num2str(ielec)];['Bin Size: ' num2str(bin_size) ' msec']})
     
     % Get channel file
     sChannel = bst_get('ChannelForStudy', iStudy);
     % Load channel file
     ChannelMat = in_bst_channel(sChannel.FileName);
-    tfOPTIONS.RowNames = {ChannelMat.Channel.Name};
     tfOPTIONS.ParentFiles = {sInputs.FileName};
     
-    isError = 0;
-    Messages = 'Success';
-    [OutputFiles] = save_virtual_freq_file(raster, the_bin_centers, tfOPTIONS);
-% % % % % % % %     [OutputFiles, Messages, isError] = bst_timefreq(DataToProcess, tfOPTIONS);
-    if ~isempty(Messages)
-        if isError
-            bst_report('Error', sProcess, sInputs, Messages);
-        else
-            bst_report('Info', sProcess, sInputs, Messages);
-            disp(['BST> process_timefreq: ' Messages]);
-        end
-    end
-end
-
-
-
-
-function [OutputFiles] = save_virtual_freq_file(raster, the_bin_centers, tfOPTIONS)
-    % This loads an example TF to get key information
-    % (RowNames,Options,History). Get rid of that
-    
-    
-    TF = permute(raster,[1 3 2]);
-    Time = the_bin_centers;
-    TFmask = true(size(raster,2),size(raster,3));
-    Freqs = 1:size(TF,3);
-    Std = [];
-    Comment = 'Raster Plot';
-    DataType = 'data';
-    TimeBands = [];
-    RefRowNames = [];
-    RowNames = tfOPTIONS.RowNames;
-    Measure = 'power';
-    Method = 'morlet';
-    DataFile = []; % Leave blank because multiple parents
-    SurfaceFile = [];
-    GridLoc = [];
-    GridAtlas = [];
-    Atlas = [];
-    HeadModelFile = [];
-    HeadModelType = [];
-    nAvg = [];
-    ColormapType = [];
-    DisplayUnits = [];
-    Options = tfOPTIONS;
-    History = [];
-    
-    
-    FileMat.TF = TF;
-    FileMat.Time = Time;
-    FileMat.TFmask = TFmask;
-    FileMat.Freqs = Freqs;
-    FileMat.Std = Std;
-    FileMat.Comment = Comment;
-    FileMat.DataType = DataType;
-    FileMat.TimeBands = TimeBands;
-    FileMat.RefRowNames = RefRowNames;
-    FileMat.RowNames = RowNames;
-    FileMat.Measure = Measure;
-    FileMat.Method = Method;
-    FileMat.DataFile = DataFile;
-    FileMat.SurfaceFile = SurfaceFile;
-    FileMat.GridLoc = GridLoc;
-    FileMat.GridAtlas = GridAtlas;
-    FileMat.Atlas = Atlas;
-    FileMat.HeadModelFile = HeadModelFile;
-    FileMat.HeadModelType = HeadModelType;
-    FileMat.nAvg = nAvg;
-    FileMat.ColormapType = ColormapType;
-    FileMat.DisplayUnits = DisplayUnits;
+    % Prepare output file structure
+    FileMat.TF = permute(raster, [1 3 2]);
+    FileMat.Time = bins;
+    FileMat.TFmask = true(size(raster, 2), size(raster, 3));
+    FileMat.Freqs = 1:size(FileMat.TF, 3);
+    FileMat.Std = [];
+    FileMat.Comment = 'Raster Plot';
+    FileMat.DataType = 'data';
+    FileMat.TimeBands = [];
+    FileMat.RefRowNames = [];
+    FileMat.RowNames = {ChannelMat.Channel.Name};
+    FileMat.Measure = 'power';
+    FileMat.Method = 'morlet';
+    FileMat.DataFile = []; % Leave blank because multiple parents
+    FileMat.SurfaceFile = [];
+    FileMat.GridLoc = [];
+    FileMat.GridAtlas = [];
+    FileMat.Atlas = [];
+    FileMat.HeadModelFile = [];
+    FileMat.HeadModelType = [];
+    FileMat.nAvg = [];
+    FileMat.ColormapType = [];
+    FileMat.DisplayUnits = [];
     FileMat.Options = tfOPTIONS;
-    FileMat.History = History;
+    FileMat.History = [];
     
     % Get output study
-    sTargetStudy = bst_get('Study', tfOPTIONS.iTargetStudy);
+    sTargetStudy = bst_get('Study', iStudy);
     % Output filename
-    Filename = bst_process('GetNewFilename', bst_fileparts(sTargetStudy.FileName), 'timefreq_rasterplot');
-    OutputFiles = {Filename};
-    save (Filename,'TF', 'Time', 'TFmask','Freqs','Std','Comment','DataType','TimeBands','RefRowNames',...
-        'RowNames','Measure','Method','DataFile','SurfaceFile','GridLoc','GridAtlas','Atlas','HeadModelFile',...
-        'HeadModelType','nAvg','ColormapType','DisplayUnits','Options','History')
-
-    db_add_data(tfOPTIONS.iTargetStudy, Filename, FileMat);
-
+    FileName = bst_process('GetNewFilename', bst_fileparts(sTargetStudy.FileName), 'timefreq_rasterplot');
+    OutputFiles = {FileName};
+    % Save output file and add to database
+    bst_save(FileName, FileMat, 'v6');
+    db_add_data(tfOPTIONS.iTargetStudy, FileName, FileMat);
+    % Display report to user
+    bst_report('Info', sProcess, sInputs, 'Success');
+    disp('BST> process_timefreq: Success');
 end
-
-
-
-
-
 
 
 
