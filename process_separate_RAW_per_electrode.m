@@ -82,9 +82,9 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                                            
         % MARTIN        
         
-        path_to_save = ['E:/brainstorm_db/Playground/data/Monkey/' sTargetStudy.Name];   % I just want the path so I can save the files:
-                                                                                      % E:\brainstorm_db\Playground\data\Monkey\@rawtest_LFP_EYE\
-                                                                                      % Compare it to the DataFile right above 
+        path_to_save = ['E:/brainstorm_db/Playground/data/Monkey/' sTargetStudy.Name]; % I just want the path so I can save the files:
+                                                                                       % E:\brainstorm_db\Playground\data\Monkey\@rawtest_LFP_EYE\
+                                                                                       % Compare it to the DataFile right above 
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                                   
                                                                                 
@@ -140,14 +140,36 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
             
             %%%%%%%%%%%%%%%%%%%%%%%%%%%    REMEMBER THIS     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
                  
-            for ielectrode = 1:sFile.header.ChannelCount
-                
-                ftemp = fopen([path_to_save '/raw_elec' num2str(sFile.header.ChannelID(ielectrode)) '.bin'], 'a');  % THIS JUST APPENDS - CHECK IF IT EXISTS, BEFORE ENTERING THIS LOOP
-                fwrite(ftemp, raw_binary_file(ielectrode,:),'int16');
-                fclose(ftemp);    
             
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            % IF RUN OUT OF MEMORY, DELETE ALL THE CREATED BINARY FILES %
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            
+            p = gcp('nocreate');
+            if isempty(p)
+                parpool;
+            end
+            parfor ielectrode = 1:sFile.header.ChannelCount
+                write_to_binary(raw_binary_file(ielectrode,:), sFile, ielectrode, path_to_save)
             end        
             isegment = isegment + 1;
+            clear raw_binary_file
         end
     end
 end
+
+
+
+
+function write_to_binary(data_single_electrode, sFile, ielectrode, path_to_save)
+
+    ftemp = fopen([path_to_save '/raw_elec' num2str(sFile.header.ChannelID(ielectrode)) '.bin'], 'a');  % THIS JUST APPENDS - CHECK IF IT EXISTS, BEFORE ENTERING THIS LOOP
+    fwrite(ftemp, data_single_electrode,'int16');
+    fclose(ftemp);    
+    
+end
+
+
+
+
+
