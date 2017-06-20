@@ -12,17 +12,6 @@ function varargout = process_get_LFP( varargin )
 
 
 
-%---------------------------------------------------------------------------------------------------------------
-% MARTIN
-% 
-% When this function finishes, I want it to act like when you import a new
-% dataset on your study:
-% Exactly what: "Review Raw file" does. But the file now would be the LFP.ns2 saved at the end of this function.
-%---------------------------------------------------------------------------------------------------------------
-
-
-
-
 
 % @=============================================================================
 % This function is part of the Brainstorm software:
@@ -130,8 +119,11 @@ function add_header(sFile, path_to_load, ChannelMat)
     % Copy that header to the new LFP file and change the Labels of the
     % electrodes to "LFP ichannel"
     
-    fid = fopen([path_to_load '/LFP.ns2'],'w'); %*.ns2:  Continuous LFP data sampled at 1 KHz
+    fid = fopen([path_to_load '/' sFile.comment(1:end-4) '_LFP.ns2'],'w'); %*.ns2:  Continuous LFP data sampled at 1 KHz
     fwrite(fid,initial_header_extended_data);
+    
+    fseek(fid, 14, 'bof');
+    fwrite(fid,'1 ksamp/sec     ','uint8'); % Change the sampling rate on the header.
     
     fseek(fid, 290, 'bof');
     fwrite(fid,1000,'uint32'); % Change the sampling rate on the header.
@@ -168,10 +160,23 @@ function add_lfp(sFile, path_to_load)
     % Convert back to .ns2
     % *.ns2:  Continuous LFP data sampled at 1 KHz
     
-    ffinal = fopen([path_to_load '/LFP.ns2'],'a');
+    ffinal = fopen([path_to_load '/' sFile.comment(1:end-4) '_LFP.ns2'],'a');
 
     fwrite(ffinal, LFP,'int16');
     fclose(ffinal);
+    
+    path_to_load = strrep(path_to_load,'/','\'); % The problem was using '/' instead of '\'
+    
+    OutputFiles = import_raw({[path_to_load '\' sFile.comment(1:end-4) '_LFP.ns2']}, 'EEG-RIPPLE', 2); 
+%     OutputFiles = import_raw({[path_to_load '/LFP.ns2']}, 'EEG-RIPPLE', iSubject, ImportOptions)
+
+%-------------------------------------
+% Martin 
+% Get the iSubject value to add above.
+% ImportOptions can be ommitted.
+%-------------------------------------
+    
+    
   
 end
 
@@ -185,7 +190,7 @@ function data_filtered = filter_and_downsample_files(sFile, path_to_load, ielect
     data = fread(fid, 'int16')';
     fclose(fid);
 
-    [data_filtered, FiltSpec, Messages] = bst_bandpass_hfilter(data, sFile.header.SamplingFreq, 1, 300, 0, 0);
+    [data_filtered, FiltSpec, Messages] = bst_bandpass_hfilter(data, sFile.header.SamplingFreq, 0.5, 300, 0, 0);
 %         [data_filtered, FiltSpec, Messages] = bst_bandpass_hfilter(data, sFile.header.SamplingFreq, HighPass, LowPass, isMirror, isRelax);
 
     data_filtered = downsample(data_filtered,sFile.header.SamplingFreq/1000);  % The file now has a different sampling rate (fs/30) = 1000Hz. This has to be stored somewhere
