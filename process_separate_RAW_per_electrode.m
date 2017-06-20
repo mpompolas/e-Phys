@@ -72,6 +72,9 @@ end
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     OutputFiles = {};
     
+    [~, iStudy, ~] = bst_process('GetOutputStudy', sProcess, sInputs);
+    sTargetStudy = bst_get('Study', iStudy);
+    
     % Convert all the files in input
     for i = 1:length(sInputs)
         DataFile = file_fullpath(sInputs(i).FileName); % E:\brainstorm_db\Playground\data\Monkey\@rawtest_LFP_EYE\data_0raw_test_LFP_EYE.mat
@@ -79,7 +82,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                                            
         % MARTIN        
         
-        path_to_save = 'E:/brainstorm_db/Playground/data/Monkey/@rawtest_LFP_EYE/';   % I just want the path so I can save the files:
+        path_to_save = ['E:/brainstorm_db/Playground/data/Monkey/' sTargetStudy.Name];   % I just want the path so I can save the files:
                                                                                       % E:\brainstorm_db\Playground\data\Monkey\@rawtest_LFP_EYE\
                                                                                       % Compare it to the DataFile right above 
         
@@ -109,7 +112,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         % IF IT EXISTS JUST SHOW A NOTIFICATION TO THE USER THAT IS ALREADY
         % COMPUTED
         
-        if exist([path_to_save 'raw_elec' num2str(sFile.header.ChannelID(sFile.header.ChannelCount)) '.bin'])
+        if exist([path_to_save '/raw_elec' num2str(sFile.header.ChannelID(sFile.header.ChannelCount)) '.bin'])
             STOP
         end
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
@@ -139,7 +142,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
                  
             for ielectrode = 1:sFile.header.ChannelCount
                 
-                ftemp = fopen([path_to_save 'raw_elec' num2str(sFile.header.ChannelID(ielectrode)) '.bin'], 'a');  % THIS JUST APPENDS - CHECK IF IT EXISTS, BEFORE ENTERING THIS LOOP
+                ftemp = fopen([path_to_save '/raw_elec' num2str(sFile.header.ChannelID(ielectrode)) '.bin'], 'a');  % THIS JUST APPENDS - CHECK IF IT EXISTS, BEFORE ENTERING THIS LOOP
                 fwrite(ftemp, raw_binary_file(ielectrode,:),'int16');
                 fclose(ftemp);    
             
