@@ -40,13 +40,13 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Description = 'www.in.gr';
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'data'};
-    sProcess.OutputTypes = {'timefreq', 'timefreq', 'timefreq'};
+    sProcess.OutputTypes = {'timefreq'};
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
     % Options: Sensor types
     sProcess.options.sensortypes.Comment = 'Sensor types or names (empty=all): ';
     sProcess.options.sensortypes.Type    = 'text';
-    sProcess.options.sensortypes.Value   = 'MEG, EEG';
+    sProcess.options.sensortypes.Value   = 'EEG';
     sProcess.options.sensortypes.InputTypes = {'data'};
     sProcess.options.sensortypes.Group   = 'input';
 %     % Options: Scouts
@@ -126,10 +126,18 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     
     tfOPTIONS.TimeVector = in_bst(sInputs(1).FileName, 'Time');
 
+    
     % === OUTPUT STUDY ===
     % Get output study
     [~, iStudy, ~] = bst_process('GetOutputStudy', sProcess, sInputs);
     tfOPTIONS.iTargetStudy = iStudy;
+    
+   
+    % Get channel file
+    sChannel = bst_get('ChannelForStudy', iStudy);
+    % Load channel file
+    ChannelMat = in_bst_channel(sChannel.FileName);
+    
     
     % === START COMPUTATION ===
     sampling_rate = abs(1. / (tfOPTIONS.TimeVector(2) - tfOPTIONS.TimeVector(1)));
@@ -138,7 +146,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     nElectrodes = size(temp.ChannelFlag,1); 
     nTrials = length(sInputs);
     nBins = ceil(length(tfOPTIONS.TimeVector) / (bin_size * sampling_rate));
-    raster = zeros(nElectrodes, nTrials, nBins);
+    raster = zeros(nElectrodes, nBins, nTrials );
     
     bins = linspace(temp.Time(1), temp.Time(end), nBins);
     
@@ -150,11 +158,11 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
             for ievent = 1:size(trial.Events,2)
                 if strcmp(trial.Events(ievent).label, ['Spikes Electrode ' num2str(ielectrode)])
                     
-                    outside = trial.Events(ievent).times>bins(end);
-                    trial.Events(ievent).times(outside) = bins(end);
-                    outside = trial.Events(ievent).times<bins(1);
-                    trial.Events(ievent).times(outside) = bins(1);
-
+                    outside_up = trial.Events(ievent).times>bins(end); % This snippet takes care of some spikes that occur outside of the window of Time due to precision incompatibility.
+                    trial.Events(ievent).times(outside_up) = bins(end);
+                    outside_down = trial.Events(ievent).times<bins(1);
+                    trial.Events(ievent).times(outside_down) = bins(1);
+                    
                     [~, ~, bin_it_belongs_to] = histcounts(trial.Events(ievent).times, bins);
                      
                     unique_bin = unique(bin_it_belongs_to);
@@ -166,17 +174,13 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
             
         end
         
-        raster(:, ifile, :) = single_file_binning;
+        raster(:, :, ifile) = single_file_binning;
     end
     
-    % Get channel file
-    sChannel = bst_get('ChannelForStudy', iStudy);
-    % Load channel file
-    ChannelMat = in_bst_channel(sChannel.FileName);
     tfOPTIONS.ParentFiles = {sInputs.FileName};
     
     % Prepare output file structure
-    FileMat.TF = permute(raster, [1 3 2]);
+    FileMat.TF = raster;
     FileMat.Time = bins;
     FileMat.TFmask = true(size(raster, 2), size(raster, 3));
     FileMat.Freqs = 1:size(FileMat.TF, 3);
