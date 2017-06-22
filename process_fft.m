@@ -1,6 +1,21 @@
 function varargout = process_spike_field_coherence( varargin )
 % PROCESS_SPIKE_FIELD_COHERENCE: Computes the spike field coherence.
 % 
+
+% There are two different TimeWindow Notations here:
+% 1. Timewindow around the spike (This is the one that is asked as input when the function is called).
+% 2. Timewindow of the trials imported to the function.
+
+% The functions selects a TimeWindow around the Spike.
+% Then applies an FFT to each Spike TimeWindow.
+% Then divides the FFT of the spike triggered average by the averages of
+% the SpikeWindow FFTs.
+
+% If this Spike TimeWindow is outside the TimeWindow of the Trial, the
+% spike is ignored for computation.
+
+
+
 % USAGE:    sProcess = process_spike_field_coherence('GetDescription')
 %        OutputFiles = process_spike_field_coherence('Run', sProcess, sInput)
 
@@ -48,11 +63,19 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.sensortypes.Value   = 'EEG';
     sProcess.options.sensortypes.InputTypes = {'data'};
     sProcess.options.sensortypes.Group   = 'input';
-    % Options: Bin size
+    % Options: Segment around spike
     sProcess.options.timewindow.Comment  = 'Spike Time window     :';
     sProcess.options.timewindow.Type     = 'timewindow';
+    
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % MARTIN
+    % I want this to have preselected -150,150 ms
     sProcess.options.timewindow.Value    = [];
-   
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
+    
+    
 end
 
 
@@ -96,6 +119,19 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     tfOPTIONS.TimeVector = in_bst(sInputs(1).FileName, 'Time');
 
     
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % MARTIN
+    % THE ERROR DOESN'T WORK FOR SOME REASON.
+    if sProcess.options.timewindow.Value{1}(1)>=0 || sProcess.options.timewindow.Value{1}(2)<=0
+        bst_report('Error', sProcess, sInputs, 'The time-selection must be around the spike.');
+    elseif sProcess.options.timewindow.Value{1}(1)==tfOPTIONS.TimeWindow(1) && sProcess.options.timewindow.Value{1}(2)==tfOPTIONS.TimeWindow(end)
+        bst_report('Error', sProcess, sInputs, 'No spikes will be selected with that time selection-Choose a smaller TimeWindow');
+    end
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+    
+    
     % === OUTPUT STUDY ===
     % Get output study
     [~, iStudy, ~] = bst_process('GetOutputStudy', sProcess, sInputs);
@@ -126,7 +162,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
             for ievent = 1:size(trial.Events, 2)
                 if strcmp(trial.Events(ievent).label, ['Spikes Electrode ' num2str(ielectrode)])
                     
-                    events_within_segment = trial.Events(ievent).samples(trial.Events(ievent).times > trial.Time(1) + abs(sProcess.options.timewindow.Value{1}(1)) & ...
+                    events_within_segment = trial.Events(ievent).samples(trial.Events(ievent).times > trial.Time(1)   + abs(sProcess.options.timewindow.Value{1}(1)) & ...
                                                                          trial.Events(ievent).times < trial.Time(end) - abs(sProcess.options.timewindow.Value{1}(2)));
                     
                     for ispike = 1:length(events_within_segment)
@@ -196,33 +232,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     FileMat.DisplayUnits = [];
     FileMat.Options = tfOPTIONS;
     FileMat.History = [];
-    
-    
-%     % Options
-%     FileMat.Options.Comment = 'FFT';
-%     FileMat.Options.Method = 'fft'; % Maybe this would work.
-%     FileMat.Options.Freqs = [];
-%     FileMat.Options.TimeVector = trial.Time;
-%     FileMat.Options.TimeBands = [];
-%     FileMat.Options.TimeWindow = [trial.Time(1) , trial.Time(end)];
-%     FileMat.Options.ClusterFuncTime = 'none';
-%     FileMat.Options.Measure = 'power';
-%     FileMat.Options.Output = 'all';
-%     FileMat.Options.RemoveEvoked = 0;
-%     FileMat.Options.MorletFc = 1;
-%     FileMat.Options.MorletFwhmTc = 3;
-%     FileMat.Options.WinLength = [];
-%     FileMat.Options.WinOverlap = 50;
-%     FileMat.Options.isMirror = 0;
-%     FileMat.Options.SensorTypes = '';
-%     FileMat.Options.Clusters = [];
-%     FileMat.Options.ScoutFunc = [];
-%     FileMat.Options.SurfaceFile = [];
-%     FileMat.Options.iTargetStudy = [];
-%     FileMat.Options.SaveKernel = 0;
-%     FileMat.Options.nComponenets = 1;
-%     FileMat.Options.NormalizeFunc = 'none';
-    
+   
     
     % Get output study
     sTargetStudy = bst_get('Study', iStudy);
