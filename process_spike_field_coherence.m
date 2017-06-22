@@ -1,9 +1,8 @@
-function varargout = process_fft( varargin )
-% PROCESS_TIMEFREQ: Computes the time frequency decomposition of any signal in the database.
+function varargout = process_spike_field_coherence( varargin )
+% PROCESS_SPIKE_FIELD_COHERENCE: Computes the spike field coherence.
 % 
-% USAGE:  sProcess = process_timefreq('GetDescription')
-%           sInput = process_timefreq('Run',     sProcess, sInput)
-%           TFmask = process_timefreq('GetEdgeEffectMask', Time, Freqs, tfOptions)
+% USAGE:    sProcess = process_spike_field_coherence('GetDescription')
+%        OutputFiles = process_spike_field_coherence('Run', sProcess, sInput)
 
 % @=============================================================================
 % This function is part of the Brainstorm software:
@@ -23,7 +22,7 @@ function varargout = process_fft( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2010-2016
+% Authors: Konstantinos Nasiotis, 2017; Martin Cousineau, 2017
 
 eval(macro_method);
 end
@@ -49,7 +48,6 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.sensortypes.Value   = 'EEG';
     sProcess.options.sensortypes.InputTypes = {'data'};
     sProcess.options.sensortypes.Group   = 'input';
-
     % Options: Bin size
     sProcess.options.timewindow.Comment  = 'Spike Time window     :';
     sProcess.options.timewindow.Type     = 'timewindow';
@@ -77,9 +75,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         tfOPTIONS.SensorTypes = sProcess.options.sensortypes.Value;
     else
         tfOPTIONS.SensorTypes = [];
-    end
-    
-    
+    end    
     
     % If a time window was specified
     if isfield(sProcess.options, 'timewindow') && ~isempty(sProcess.options.timewindow) && ~isempty(sProcess.options.timewindow.Value) && iscell(sProcess.options.timewindow.Value)
@@ -87,7 +83,6 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     elseif ~isfield(tfOPTIONS, 'TimeWindow')
         tfOPTIONS.TimeWindow = [];
     end
-    
     
     % Output
     if isfield(sProcess.options, 'avgoutput') && ~isempty(sProcess.options.avgoutput) && ~isempty(sProcess.options.avgoutput.Value)
@@ -105,7 +100,6 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     % Get output study
     [~, iStudy, ~] = bst_process('GetOutputStudy', sProcess, sInputs);
     tfOPTIONS.iTargetStudy = iStudy;
-    
    
     % Get channel file
     sChannel = bst_get('ChannelForStudy', iStudy);
@@ -121,9 +115,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     nElectrodes = size(temp.ChannelFlag,1); 
     nTrials = length(sInputs);
     
-    
-    
-    all_trials_FFTs = cell(nElectrodes,2);
+    all_trials_FFTs = cell(nElectrodes, 2);
     
     % Optimize this
     for ifile = 1:nTrials
@@ -131,24 +123,23 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         
         for ielectrode = 1:nElectrodes
             disp(ielectrode)
-            for ievent = 1:size(trial.Events,2)
+            for ievent = 1:size(trial.Events, 2)
                 if strcmp(trial.Events(ievent).label, ['Spikes Electrode ' num2str(ielectrode)])
                     
-                    events_within_segment = trial.Events(ievent).samples(trial.Events(ievent).times>trial.Time(1)   + abs(sProcess.options.timewindow.Value{1}(1)) &...
-                                                                         trial.Events(ievent).times<trial.Time(end) - abs(sProcess.options.timewindow.Value{1}(2)));
-                    
+                    events_within_segment = trial.Events(ievent).samples(trial.Events(ievent).times > trial.Time(1) + abs(sProcess.options.timewindow.Value{1}(1)) & ...
+                                                                         trial.Events(ievent).times < trial.Time(end) - abs(sProcess.options.timewindow.Value{1}(2)));
                     
                     for ispike = 1:length(events_within_segment)
-                        
-                        all_trials_FFTs{ielectrode,1} = [all_trials_FFTs{ielectrode,1} ; trial.F(ielectrode,round(length(trial.Time)/2) + events_within_segment(ispike) - abs(sProcess.options.timewindow.Value{1}(1))*sampling_rate:...
-                                                                                                            round(length(trial.Time)/2) + events_within_segment(ispike) + abs(sProcess.options.timewindow.Value{1}(2))*sampling_rate )];
+                        all_trials_FFTs{ielectrode,1} = [all_trials_FFTs{ielectrode,1};
+                                                         trial.F(ielectrode, ...
+                                                                 round(length(trial.Time) / 2) + events_within_segment(ispike) - abs(sProcess.options.timewindow.Value{1}(1)) * sampling_rate: ...
+                                                                 round(length(trial.Time) / 2) + events_within_segment(ispike) + abs(sProcess.options.timewindow.Value{1}(2)) * sampling_rate ...
+                                                                ) ...
+                                                        ];
                                                                   
-                        [temp_FFT , Freqs] = compute_FFT(all_trials_FFTs{ielectrode,1}(end,:), trial.Time);  
-                        all_trials_FFTs{ielectrode,2} = [all_trials_FFTs{ielectrode,2} ; temp_FFT];                                                         
-                                                                                          
+                        [temp_FFT, Freqs] = compute_FFT(all_trials_FFTs{ielectrode,1}(end,:), trial.Time);  
+                        all_trials_FFTs{ielectrode,2} = [all_trials_FFTs{ielectrode,2} ; temp_FFT];
                     end
-                    
-                    
                    
                 end
             end
@@ -159,22 +150,22 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     
     
     % Calculate the SFC
-    SFC = zeros(nElectrodes,1,ceil(length(temp.Time)/2)); %MAKE SURE THE SECOND DIMENSION IS CORRECT HERE
+    SFC = zeros(nElectrodes, 1, ceil(length(temp.Time) / 2)); %MAKE SURE THE SECOND DIMENSION IS CORRECT HERE
 
     
     
     for ielectrode = 1:nElectrodes
         
-        single_electrode_FFTs   = abs(all_trials_FFTs{ielectrode,2}).^2; % Power
+        single_electrode_FFTs   = abs(all_trials_FFTs{ielectrode,2}) .^ 2; % Power
         single_electrode_trials = all_trials_FFTs{ielectrode,1};
         
 
-        [FFT_of_average, ~] = compute_FFT(sum(single_electrode_trials), trial.Time);  
-        SFC(ielectrode,1,:) = (abs(FFT_of_average).^2)./sum(single_electrode_FFTs);
+        [FFT_of_average, ~]   = compute_FFT(sum(single_electrode_trials), trial.Time);  
+        SFC(ielectrode, 1, :) = (abs(FFT_of_average) .^ 2) ./ sum(single_electrode_FFTs);
     
     end
     
-    SFC(isnan(SFC)) = 0; % Convert nan to zeros cause Brainstorm won't read it otherwises
+    SFC(isnan(SFC)) = 0; % Convert NaN to zeros cause Brainstorm won't read it otherwises
     
     
     
@@ -182,7 +173,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     
     % Prepare output file structure
     FileMat.TF = SFC;
-    FileMat.Time = [trial.Time(1) trial.Time(end)];
+    FileMat.Time = [trial.Time(1), trial.Time(end)];
     FileMat.TFmask = [];
     FileMat.Freqs = Freqs;
     FileMat.Std = [];
@@ -236,14 +227,14 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     % Get output study
     sTargetStudy = bst_get('Study', iStudy);
     % Output filename
-    FileName = bst_process('GetNewFilename', bst_fileparts(sTargetStudy.FileName), 'timefreq_spike_field_coherence');
+    FileName = bst_process('GetNewFilename', bst_fileparts(sTargetStudy.FileName), 'timefreq_fft_spike_field_coherence');
     OutputFiles = {FileName};
     % Save output file and add to database
     bst_save(FileName, FileMat, 'v6');
     db_add_data(tfOPTIONS.iTargetStudy, FileName, FileMat);
     % Display report to user
     bst_report('Info', sProcess, sInputs, 'Success');
-    disp('BST> process_timefreq: Success');
+    disp('BST> process_spike_field_coherence: Success');
 end
 
 
@@ -256,11 +247,11 @@ function [TF, Freqs] = compute_FFT(F, time)
     nTime = length(time);
     % NFFT = 2^nextpow2(nTime);    % Function fft() pads the signal with zeros before computing the FT
     NFFT = nTime;                  % No zero-padding: Nfft = Ntime
-    sfreq = 1/(time(2)-time(1));
+    sfreq = 1 / (time(2) - time(1));
     % Positive frequency bins spanned by FFT
-    Freqs = sfreq / 2 * linspace(0,1,NFFT/2+1);
+    Freqs = sfreq / 2 * linspace(0, 1, NFFT / 2 + 1);
     % Keep only first and last time instants
-    time = time([1 end]);
+    time = time([1, end]);
     % Remove mean of the signal
     F = bst_bsxfun(@minus, F, mean(F,2));
     % Apply a hamming window to signal
@@ -269,7 +260,7 @@ function [TF, Freqs] = compute_FFT(F, time)
     Ffft = fft(F, NFFT, 2);
     % Keep only first half
     % (x2 to recover full power from negative frequencies)
-    TF = 2 * Ffft(:,1:NFFT/2+1) ./ nTime;
+    TF = 2 * Ffft(:, 1:NFFT / 2 + 1) ./ nTime;
     % Permute dimensions: time and frequency
     TF = permute(TF, [1 3 2]);
     

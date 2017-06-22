@@ -1,9 +1,8 @@
-function varargout = process_timefreq( varargin )
-% PROCESS_TIMEFREQ: Computes the time frequency decomposition of any signal in the database.
+function varargout = process_rasterplot_Nas( varargin )
+% PROCESS_RASTERPLOT_NAS: Computes a rasterplot per electrode.
 % 
-% USAGE:  sProcess = process_timefreq('GetDescription')
-%           sInput = process_timefreq('Run',     sProcess, sInput)
-%           TFmask = process_timefreq('GetEdgeEffectMask', Time, Freqs, tfOptions)
+% USAGE:    sProcess = process_rasterplot_Nas('GetDescription')
+%        OutputFiles = process_rasterplot_Nas('Run', sProcess, sInput)
 
 % @=============================================================================
 % This function is part of the Brainstorm software:
@@ -23,7 +22,7 @@ function varargout = process_timefreq( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2010-2016
+% Authors: Konstantinos Nasiotis, 2017; Martin Cousineau, 2017
 
 eval(macro_method);
 end
@@ -49,29 +48,6 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.sensortypes.Value   = 'EEG';
     sProcess.options.sensortypes.InputTypes = {'data'};
     sProcess.options.sensortypes.Group   = 'input';
-%     % Options: Scouts
-%     sProcess.options.clusters.Comment = '';
-%     sProcess.options.clusters.Type    = 'scout_confirm';
-%     sProcess.options.clusters.Value   = {};
-%     sProcess.options.clusters.InputTypes = {'results'};
-%     sProcess.options.clusters.Group   = 'input';
-%     % Options: Scout function
-%     sProcess.options.scoutfunc.Comment    = {'Mean', 'Max', 'PCA', 'Std', 'All', 'Scout function:'};
-%     sProcess.options.scoutfunc.Type       = 'radio_line';
-%     sProcess.options.scoutfunc.Value      = 1;
-%     sProcess.options.scoutfunc.InputTypes = {'results'};
-%     sProcess.options.scoutfunc.Group   = 'input';
-%     % Options: Time-freq
-%     sProcess.options.edit.Comment = {'panel_timefreq_options', 'Morlet wavelet options: '};
-%     sProcess.options.edit.Type    = 'editpref';
-%     sProcess.options.edit.Value   = [];
-%     % Options: Normalize
-%     sProcess.options.labelnorm.Comment = '<BR>Spectral flattening:';
-%     sProcess.options.labelnorm.Type    = 'label';
-%     sProcess.options.normalize.Comment = {'<B>None</B>: Save non-standardized time-frequency maps', '<B>1/f compensation</B>: Multiply output values by frequency'; ...
-%                                           'none', 'multiply'};
-%     sProcess.options.normalize.Type    = 'radio_label';
-%     sProcess.options.normalize.Value   = 'none';
     % Options: Bin size
     sProcess.options.binsize.Comment = 'Bin size: ';
     sProcess.options.binsize.Type    = 'value';
@@ -146,7 +122,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     nElectrodes = size(temp.ChannelFlag,1); 
     nTrials = length(sInputs);
     nBins = ceil(length(tfOPTIONS.TimeVector) / (bin_size * sampling_rate));
-    raster = zeros(nElectrodes, nBins, nTrials );
+    raster = zeros(nElectrodes, nBins, nTrials);
     
     bins = linspace(temp.Time(1), temp.Time(end), nBins);
     
@@ -158,9 +134,9 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
             for ievent = 1:size(trial.Events,2)
                 if strcmp(trial.Events(ievent).label, ['Spikes Electrode ' num2str(ielectrode)])
                     
-                    outside_up = trial.Events(ievent).times>bins(end); % This snippet takes care of some spikes that occur outside of the window of Time due to precision incompatibility.
+                    outside_up = trial.Events(ievent).times > bins(end); % This snippet takes care of some spikes that occur outside of the window of Time due to precision incompatibility.
                     trial.Events(ievent).times(outside_up) = bins(end);
-                    outside_down = trial.Events(ievent).times<bins(1);
+                    outside_down = trial.Events(ievent).times < bins(1);
                     trial.Events(ievent).times(outside_down) = bins(1);
                     
                     [~, ~, bin_it_belongs_to] = histcounts(trial.Events(ievent).times, bins);
