@@ -79,15 +79,8 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     for i = 1:length(sInputs)
         DataFile = file_fullpath(sInputs(i).FileName); % E:\brainstorm_db\Playground\data\Monkey\@rawtest_LFP_EYE\data_0raw_test_LFP_EYE.mat
                                                                                           
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                                            
-        % MARTIN        
+       [path_to_save, ~, ~] = bst_fileparts(file_fullpath(sInputs(i).FileName));
         
-        path_to_save = ['E:/brainstorm_db/Playground/data/Monkey/' sTargetStudy.Name]; % I just want the path so I can save the files:
-                                                                                       % E:\brainstorm_db\Playground\data\Monkey\@rawtest_LFP_EYE\
-                                                                                       % Compare it to the DataFile right above 
-        
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                                   
-                                                                                
         DataMat = in_bst_data(DataFile);
         sFile = DataMat.F;
 

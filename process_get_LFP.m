@@ -80,24 +80,31 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     
     % Convert all the files in input
     for i = 1:length(sInputs)
-        DataFile = file_fullpath(sInputs(i).FileName); % E:\brainstorm_db\Playground\data\Monkey\@rawtest_LFP_EYE\data_0raw_test_LFP_EYE.mat
-                                                                                          
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                                            
-        % MARTIN        
+        DataFile = file_fullpath(sInputs(i).FileName); % E:\brainstorm_db\Playground\data\Monkey\@rawf114a\data_0raw_f114a.mat
+                                                                                                                    
+        [path_to_load, filebase, ~] = bst_fileparts(file_fullpath(sInputs(i).FileName));
+        filebase = filebase(7:end); % |f114a| Just the filename without the data_0 prefix and the .mat extention. I will use this to create the events after
         
-        path_to_load = ['E:/brainstorm_db/Playground/data/Monkey/' sTargetStudy.Name];   % I just want the path so I can load the files:
-                                                                                         % E:\brainstorm_db\Playground\data\Monkey\@rawtest_LFP_EYE\
-        
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                                   
-                                                                                
         DataMat = in_bst_data(DataFile);
         sFile = DataMat.F;
+        
+        sStudy = bst_get('ChannelFile', sChannel.FileName);
+        [~, iSubject] = bst_get('Subject', sStudy.BrainStormSubject, 1);
+
         
         % Add the header to the file
         add_header(sFile, path_to_load, ChannelMat)
         
         % Add the LFP to the file
+        path_to_load = strrep(path_to_load,'/','\'); % The problem was using '/' instead of '\'
         add_lfp(sFile, path_to_load)
+        
+        
+
+        % Import the RAW file in the database viewer and open it immediately
+        OutputFiles = import_raw({[path_to_load '\' sFile.comment(1:end-4) '_LFP.ns2']}, 'EEG-RIPPLE', iSubject);
+
+        empty = convert_downsampled_events(sFile, path_to_load, filebase);
         
     end
 end
@@ -165,19 +172,6 @@ function add_lfp(sFile, path_to_load)
     fwrite(ffinal, LFP,'int16');
     fclose(ffinal);
     
-    path_to_load = strrep(path_to_load,'/','\'); % The problem was using '/' instead of '\'
-    
-    OutputFiles = import_raw({[path_to_load '\' sFile.comment(1:end-4) '_LFP.ns2']}, 'EEG-RIPPLE', 2); 
-%     OutputFiles = import_raw({[path_to_load '/LFP.ns2']}, 'EEG-RIPPLE', iSubject, ImportOptions)
-
-%-------------------------------------
-% Martin 
-% Get the iSubject value to add above.
-% ImportOptions can be ommitted.
-%-------------------------------------
-    
-    
-  
 end
 
 
@@ -190,10 +184,54 @@ function data_filtered = filter_and_downsample_files(sFile, path_to_load, ielect
     data = fread(fid, 'int16')';
     fclose(fid);
 
-    [data_filtered, FiltSpec, Messages] = bst_bandpass_hfilter(data, sFile.header.SamplingFreq, 0.5, 300, 0, 0);
-%         [data_filtered, FiltSpec, Messages] = bst_bandpass_hfilter(data, sFile.header.SamplingFreq, HighPass, LowPass, isMirror, isRelax);
+    [data_filtered, ~, ~] = bst_bandpass_hfilter(data, sFile.header.SamplingFreq, 0.5, 300, 0, 0);
+%   [data_filtered, FiltSpec, Messages] = bst_bandpass_hfilter(data, sFile.header.SamplingFreq, HighPass, LowPass, isMirror, isRelax);
 
     data_filtered = downsample(data_filtered,sFile.header.SamplingFreq/1000);  % The file now has a different sampling rate (fs/30) = 1000Hz. This has to be stored somewhere
+
+end
+
+
+
+
+function empty = convert_downsampled_events(sFile, pathname, filebase)
+    
+    if exist([pathname '\events.mat'], 'file') == 2
+        temp = load([pathname '\events.mat']);
+        
+        for iEvent = 1:length(temp.events)
+            temp.events(iEvent).samples = round(temp.events(iEvent).samples *1000/sFile.header.SamplingFreq);
+        end
+        events = temp.events;
+        save([pathname '_LFP\events_LFP.mat'],'events')
+        clear events
+        
+    end
+    
+    if exist([pathname '\events_original_batch_sorted_' filebase '.mat'], 'file') == 2
+        load([pathname '\events_original_batch_sorted_' filebase '.mat']);
+        
+        for iEvent = 1:length(events)
+            events(iEvent).samples = round(events(iEvent).samples *1000/sFile.header.SamplingFreq);
+        end
+        
+        save([pathname '_LFP\events_original_batch_sorted_LFP_' filebase(5:end) '.mat'],'events')
+        clear events
+        
+    end
+    
+    if exist([pathname '\events_sorted_' filebase '.mat'], 'file') == 2
+        load([pathname '\events_sorted_' filebase '.mat']);
+        
+        for iEvent = 1:length(events)
+            events(iEvent).samples = round(events(iEvent).samples *1000/sFile.header.SamplingFreq);
+        end
+        
+        save([pathname '_LFP\events_sorted_LFP_' filebase(5:end) '.mat'],'events')
+        clear events
+        
+    end
+    empty = [];
 
 end
 

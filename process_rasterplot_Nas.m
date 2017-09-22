@@ -113,26 +113,33 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     sChannel = bst_get('ChannelForStudy', iStudy);
     % Load channel file
     ChannelMat = in_bst_channel(sChannel.FileName);
-    
+   
+    % Get the channels IDs
+    ChannelID = zeros(length(ChannelMat.Channel),1);
+    for iChannel = 1:length(ChannelMat.Channel)
+        temp = strrep(ChannelMat.Channel(iChannel).Name,'LFP ','');
+        ChannelID(iChannel) = str2double(temp); clear temp;
+    end
     
     % === START COMPUTATION ===
-    sampling_rate = abs(1. / (tfOPTIONS.TimeVector(2) - tfOPTIONS.TimeVector(1)));
+    sampling_rate = round(abs(1. / (tfOPTIONS.TimeVector(2) - tfOPTIONS.TimeVector(1))));
     
     [temp, ~] = in_bst(sInputs(1).FileName);
     nElectrodes = size(temp.ChannelFlag,1); 
     nTrials = length(sInputs);
-    nBins = ceil(length(tfOPTIONS.TimeVector) / (bin_size * sampling_rate));
+    nBins = round(length(tfOPTIONS.TimeVector) / (bin_size * sampling_rate));
     raster = zeros(nElectrodes, nBins, nTrials);
     
-    bins = linspace(temp.Time(1), temp.Time(end), nBins);
+    bins = unique([linspace(temp.Time(1),0 ,nBins/2+1)  linspace(0, temp.Time(end), nBins/2+1)]); % This doesn't give the eact bin_size if the bin_size doesn't divide the length of the signal
     
     for ifile = 1:length(sInputs)
         [trial, ~] = in_bst(sInputs(ifile).FileName);
         single_file_binning = zeros(nElectrodes, nBins);
-        
+
         for ielectrode = 1:size(trial.F,1)
             for ievent = 1:size(trial.Events,2)
-                if strcmp(trial.Events(ievent).label, ['Spikes Electrode ' num2str(ielectrode)])
+                
+                if strcmp(trial.Events(ievent).label, ['Spikes Electrode ' num2str(ChannelID(ielectrode))])
                     
                     outside_up = trial.Events(ievent).times > bins(end); % This snippet takes care of some spikes that occur outside of the window of Time due to precision incompatibility.
                     trial.Events(ievent).times(outside_up) = bins(end);
@@ -144,7 +151,8 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
                     unique_bin = unique(bin_it_belongs_to);
                     occurences = [unique_bin; histc(bin_it_belongs_to, unique_bin)];
                      
-                    single_file_binning(ielectrode,occurences(1,:)) = occurences(2,:);                    
+                    single_file_binning(ielectrode,occurences(1,:)) = occurences(2,:); 
+                    break
                 end
             end
             
@@ -157,7 +165,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     
     % Prepare output file structure
     FileMat.TF = raster;
-    FileMat.Time = bins;
+    FileMat.Time = diff(bins(1:2))/2+bins(1:end-1); % CHECK THIS OUT - IT WILL NOT GO ALL THE WAY BUT IT WILL HAVE THE CORRECT NUMBER OF BINS
     FileMat.TFmask = true(size(raster, 2), size(raster, 3));
     FileMat.Freqs = 1:size(FileMat.TF, 3);
     FileMat.Std = [];
